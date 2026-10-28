@@ -253,12 +253,18 @@ def get_transcript_via_ytdlp(video_id: str, preferred_languages: Optional[List[s
 def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Fetch transcripts for a YouTube video.
-    Tries YouTubeTranscriptApi first, then automatically falls back to yt-dlp mobile client
-    to bypass cloud/datacenter IP blocks.
+    Uses yt-dlp mobile client (Android/iOS) as PRIMARY to bypass cloud datacenter IP blocks.
+    Falls back to YouTubeTranscriptApi.
     """
     if preferred_languages is None:
         preferred_languages = ['en', 'en-US', 'hi', 'es', 'fr', 'de']
         
+    # 1. Try mobile client emulation FIRST (bypasses cloud IP bans on Streamlit Cloud/AWS/GCP)
+    ytdlp_res = get_transcript_via_ytdlp(video_id, preferred_languages)
+    if ytdlp_res.get('success'):
+        return ytdlp_res
+
+    # 2. Fallback to YouTubeTranscriptApi if mobile client didn't find tracks
     try:
         ytt_api = YouTubeTranscriptApi()
         transcript_list = ytt_api.list(video_id)
@@ -267,7 +273,7 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
         selected_lang = None
         is_generated = False
         
-        # 1. Try manual transcript
+        # Try manual transcript
         for lang in preferred_languages:
             try:
                 transcript = transcript_list.find_manually_created_transcript([lang])
@@ -277,7 +283,7 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
             except Exception:
                 continue
                 
-        # 2. Try generated transcript
+        # Try generated transcript
         if not transcript:
             for lang in preferred_languages:
                 try:
@@ -288,7 +294,7 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
                 except Exception:
                     continue
                     
-        # 3. Take first available
+        # Take first available
         if not transcript:
             for t in transcript_list:
                 transcript = t
@@ -297,8 +303,7 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
                 break
 
         if not transcript:
-            # Fallback to yt-dlp
-            return get_transcript_via_ytdlp(video_id, preferred_languages)
+            return ytdlp_res  # return original error
             
         fetched = transcript.fetch()
         
@@ -348,8 +353,5 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
             'word_count': len(full_text.split())
         }
         
-    except (TranscriptsDisabled, NoTranscriptFound):
-        return get_transcript_via_ytdlp(video_id, preferred_languages)
-    except Exception as e:
-        # Any other error (including IP block / RequestBlocked): invoke mobile client fallback
-        return get_transcript_via_ytdlp(video_id, preferred_languages)
+    except Exception:
+        return ytdlp_res
