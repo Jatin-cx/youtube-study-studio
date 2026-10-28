@@ -1,15 +1,17 @@
 """
-YouTube Study Studio AI - Full-Screen Interactive Study Workspace.
+YouTube Study Studio AI - Ultra-Stable Multi-Device Web & Mobile App.
+Optimized for 100% reliability on Mobile Phones, Tablets, and Desktop Browsers.
 Features:
-- Full-screen modern dashboard layout with responsive sidebar history.
-- Multi-section study guide: Executive Summary, Cheat Sheet, Definitions, Formulas.
-- Interactive AI Tutor Chat: Ask questions and clarify doubts directly about the lecture!
-- Interactive Quiz & Flashcards: Click-to-reveal answers for active recall study.
-- Complete PDF Export & SQLite Database Archive.
+- Mobile-responsive video header with prominent duration badge.
+- Instant in-memory result presentation (eliminates mobile disconnects and rerun bugs).
+- Android Innertube client fallback to bypass cloud datacenter IP blocks.
+- Gemini 3.5 Flash Lite multi-model failover for 1-3+ hour lectures.
+- SQLite Database history with private user isolation.
 """
 
 import os
 import re
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 import streamlit as st
@@ -42,12 +44,12 @@ if not BACKEND_API_KEY:
     except Exception:
         pass
 
-# Page Configuration: Full-width modern dashboard
+# Page Configuration: Mobile & Desktop responsive layout
 st.set_page_config(
     page_title="LectureScribe Studio AI",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Output directory for generated PDFs
@@ -57,16 +59,11 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # Initialize database
 init_db()
 
-# User Private Session Isolation (Each visitor gets their own private workspace)
-import uuid
+# User Private Session Isolation (Resilient across mobile and desktop)
+if "user_id" not in st.session_state:
+    st.session_state.user_id = str(uuid.uuid4())[:12]
 
-if "uid" in st.query_params:
-    USER_ID = str(st.query_params["uid"])
-else:
-    USER_ID = st.session_state.get("user_id") or str(uuid.uuid4())[:12]
-    st.query_params["uid"] = USER_ID
-
-st.session_state["user_id"] = USER_ID
+USER_ID = st.session_state.user_id
 
 
 def sanitize_filename(name: str) -> str:
@@ -75,44 +72,43 @@ def sanitize_filename(name: str) -> str:
     return sanitized.strip()[:60]
 
 
-# ---------------- LUXURY MODERN FULL-SCREEN CSS ----------------
+# ---------------- MOBILE & DESKTOP RESPONSIVE CSS ----------------
 CUSTOM_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
-/* App Background */
 .stApp {
     background-color: #F8FAFC;
 }
 
-/* Adjust Main Container Padding */
+/* Responsive Container Padding */
 .block-container {
-    padding-top: 16px !important;
-    padding-bottom: 32px !important;
-    padding-left: 28px !important;
-    padding-right: 28px !important;
+    padding-top: 14px !important;
+    padding-bottom: 30px !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
     max-width: 100% !important;
 }
 
-/* Top Navigation Bar */
+/* Sleek Top Bar */
 .top-nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: white;
     border: 1px solid #E2E8F0;
-    border-radius: 14px;
-    padding: 12px 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+    padding: 12px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .brand-text {
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 800;
     color: #1E293B;
     display: flex;
@@ -125,95 +121,74 @@ html, body, [class*="css"] {
     color: #4F46E5;
     font-size: 11px;
     font-weight: 700;
-    padding: 3px 8px;
+    padding: 2px 8px;
     border-radius: 6px;
-    letter-spacing: 0.5px;
 }
 
-/* Interactive Cards */
-.interactive-card {
+/* Universal Cards */
+.dash-card {
     background: white;
-    border: 1px solid #E2E8F0;
     border-radius: 14px;
-    padding: 20px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+    padding: 18px 20px;
     margin-bottom: 16px;
 }
 
-/* Video Header Banner */
-.video-banner {
-    background: linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%);
-    border-radius: 16px;
-    padding: 22px 26px;
-    color: white;
-    margin-bottom: 20px;
-    box-shadow: 0 10px 20px -5px rgba(67, 56, 202, 0.25);
-}
-
-.video-banner-title {
-    font-size: 22px;
-    font-weight: 700;
-    margin-bottom: 6px;
-}
-
-.video-tag {
-    background: rgba(255, 255, 255, 0.18);
-    color: white;
-    font-size: 12px;
+/* Badges */
+.video-badge {
+    background: #EEF2FF;
+    color: #4F46E5;
     font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 20px;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 6px;
     display: inline-block;
-    margin-right: 8px;
+    margin-right: 6px;
+    margin-bottom: 4px;
 }
 
-/* Primary Action Buttons */
+.duration-badge {
+    background: #FEF3C7;
+    color: #B45309;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+/* Buttons */
 .stButton>button {
     background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%) !important;
     color: white !important;
-    font-weight: 600 !important;
-    font-size: 14px !important;
-    padding: 9px 20px !important;
+    font-weight: 700 !important;
+    font-size: 15px !important;
+    padding: 10px 24px !important;
     border-radius: 10px !important;
     border: none !important;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25) !important;
-    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
 }
 
-.stButton>button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35) !important;
-}
-
-/* Download Button */
 .stDownloadButton>button {
     background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
     color: white !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     font-size: 14px !important;
-    padding: 9px 20px !important;
-    border-radius: 10px !important;
+    padding: 8px 20px !important;
+    border-radius: 8px !important;
     border: none !important;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
 }
 
-/* Sidebar Styling */
-[data-testid="stSidebar"] {
-    background-color: #FFFFFF;
-    border-right: 1px solid #E2E8F0;
-    padding-top: 14px;
+/* Inputs */
+.stTextInput>div>div>input {
+    border-radius: 10px !important;
+    font-size: 15px !important;
+    padding: 10px 14px !important;
 }
 
-/* Quiz Box */
-.quiz-card {
-    background: #F8FAFC;
-    border-left: 4px solid #6366F1;
-    border-radius: 8px;
-    padding: 14px 18px;
-    margin-bottom: 12px;
-}
-
-/* Streamlit Header removal */
 header[data-testid="stHeader"] {
     background: transparent;
 }
@@ -225,7 +200,7 @@ footer {
 
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# Session State Initialization for Interactive Workspace
+# Session State Initialization
 if "active_record" not in st.session_state:
     st.session_state.active_record = None
 
@@ -241,14 +216,13 @@ with st.sidebar:
     stats = get_db_stats(USER_ID)
     st.caption(f"**{stats['total_notes']}** Notes in your private library")
 
-    if st.button("➕ New Study Session", use_container_width=True):
+    if st.button("➕ New Study Session", width="stretch"):
         st.session_state.active_record = None
         st.session_state.chat_messages = []
         st.rerun()
 
-    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
 
-    # Search History in Sidebar
     hist_search = st.text_input("🔍 Search History", placeholder="Topic or channel...", label_visibility="collapsed")
     records = get_all_records(USER_ID, hist_search)
 
@@ -258,16 +232,15 @@ with st.sidebar:
         for r in records:
             col_h1, col_h2 = st.columns([4, 1])
             with col_h1:
-                # Clickable session item
-                is_current = st.session_state.active_record and st.session_state.active_record.get('id') == r['id']
-                label = f"📖 {r['title'][:28]}..." if len(r['title']) > 28 else f"📖 {r['title']}"
-                if st.button(label, key=f"rec_btn_{r['id']}", use_container_width=True):
+                label = f"📖 {r['title'][:26]}..." if len(r['title']) > 26 else f"📖 {r['title']}"
+                if st.button(label, key=f"rec_btn_{r['id']}", width="stretch"):
                     full_r = get_record_by_id(r['id'], user_id=USER_ID)
-                    st.session_state.active_record = full_r
-                    st.session_state.chat_messages = []
-                    st.rerun()
+                    if full_r:
+                        st.session_state.active_record = full_r
+                        st.session_state.chat_messages = []
+                        st.rerun()
             with col_h2:
-                if st.button("✕", key=f"rec_del_{r['id']}", help="Delete session"):
+                if st.button("✕", key=f"rec_del_{r['id']}", help="Delete"):
                     delete_record(r['id'], user_id=USER_ID)
                     if st.session_state.active_record and st.session_state.active_record.get('id') == r['id']:
                         st.session_state.active_record = None
@@ -285,7 +258,7 @@ st.markdown("""
         <span class="brand-badge">STUDIO</span>
     </div>
     <div style="font-size: 13px; color: #64748B;">
-        Interactive Lecture Notes • AI Tutor Chat • Printable PDF
+        Full Course Notes • AI Tutor Chat • Printable PDF
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -295,79 +268,76 @@ st.markdown("""
 # MAIN STAGE: ACTIVE SESSION OR GENERATION INPUT
 # =====================================================================
 
-# CASE 1: Active Record Loaded (either just generated or selected from sidebar)
+# CASE 1: Active Record Loaded
 if st.session_state.active_record:
     rec = st.session_state.active_record
 
     # Header Banner of Active Lecture
     st.markdown(f"""
-    <div class="video-banner">
-        <div class="video-banner-title">{rec['title']}</div>
-        <div style="margin-top: 8px;">
-            <span class="video-tag">👤 {rec['channel']}</span>
-            <span class="video-tag">⏱️ {rec['duration']}</span>
-            <span class="video-tag">📅 {rec['created_at']}</span>
+    <div class="dash-card" style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%); color: white;">
+        <h3 style="margin: 0 0 8px 0; color: white;">{rec['title']}</h3>
+        <div>
+            <span class="video-badge" style="background: rgba(255,255,255,0.2); color: white;">👤 {rec['channel']}</span>
+            <span class="duration-badge">⏱️ {rec['duration']}</span>
+            <span class="video-badge" style="background: rgba(255,255,255,0.2); color: white;">📅 {rec['created_at']}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     # Action Toolbar
-    col_act1, col_act2, col_act3 = st.columns([1.2, 1.2, 3])
+    col_act1, col_act2, col_act3 = st.columns([1.5, 1.5, 2])
     with col_act1:
         if rec.get('pdf_blob'):
             st.download_button(
-                label="⬇️ Download PDF Guide",
+                label="⬇️ Download Study Guide PDF",
                 data=rec['pdf_blob'],
                 file_name=rec['pdf_filename'],
                 mime="application/pdf",
-                use_container_width=True
+                type="primary",
+                width="stretch"
             )
         elif os.path.exists(rec.get('pdf_path', '')):
             with open(rec['pdf_path'], "rb") as pf:
                 st.download_button(
-                    label="⬇️ Download PDF Guide",
+                    label="⬇️ Download Study Guide PDF",
                     data=pf.read(),
                     file_name=rec['pdf_filename'],
                     mime="application/pdf",
-                    use_container_width=True
+                    type="primary",
+                    width="stretch"
                 )
     with col_act2:
-        if st.button("🔗 Open on YouTube", use_container_width=True):
-            st.write(f"YouTube Link: {rec['url']}")
-    with col_act3:
-        st.write("")
+        if st.button("➕ Generate Another Video", width="stretch"):
+            st.session_state.active_record = None
+            st.session_state.chat_messages = []
+            st.rerun()
 
     st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-    # 4 INTERACTIVE WORKSPACE TABS
+    # Interactive Workspace Tabs
     tab_notes, tab_chat, tab_quiz, tab_transcript = st.tabs([
         "📖 Comprehensive Notes",
         "💬 Chat with AI Lecture Tutor",
-        "🎯 Flashcards & Practice Quiz",
-        "⏱️ Timestamped Transcript"
+        "🎯 Flashcards & Quiz",
+        "⏱️ Transcript"
     ])
 
-    # TAB 1: Comprehensive Notes
     with tab_notes:
         st.markdown(rec['notes_markdown'])
 
-    # TAB 2: Interactive AI Tutor Chat (Ask doubts about this lecture!)
     with tab_chat:
         st.markdown("##### 💬 Ask Your AI Tutor About This Lecture")
         st.caption("Ask questions, request simpler explanations, formula derivations, or exam tips based on what was taught in this video.")
 
-        # Display conversation history
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-        # Chat Input
         if user_prompt := st.chat_input("Ask a question about this lecture..."):
             st.session_state.chat_messages.append({"role": "user", "content": user_prompt})
             with st.chat_message("user"):
                 st.markdown(user_prompt)
 
-            # Generate response from Gemini with the lecture context
             with st.chat_message("assistant"):
                 with st.spinner("AI Tutor is answering..."):
                     try:
@@ -396,31 +366,28 @@ Answer the student's question clearly, accurately, and conceptually based on the
                     except Exception as e:
                         st.error(f"Error answering question: {str(e)}")
 
-    # TAB 3: Flashcards & Practice Quiz
     with tab_quiz:
         st.markdown("##### 🎯 Self-Study & Active Recall Quiz")
-        st.caption("Test your comprehension of the core concepts taught in this lecture.")
-
-        # Extract comprehension section or display interactive flashcards
         notes_txt = rec['notes_markdown']
-        if "Comprehension Check" in notes_txt or "Quiz" in notes_txt:
+        if "Comprehension Check" in notes_txt:
             st.markdown(notes_txt.split("Comprehension Check")[-1])
+        elif "Quiz" in notes_txt:
+            st.markdown(notes_txt.split("Quiz")[-1])
         else:
-            st.info("Review the study notes to test your understanding!")
+            st.info("Study notes are available in the first tab to review key concepts!")
 
-    # TAB 4: Timestamped Transcript
     with tab_transcript:
         st.markdown("##### ⏱️ Full Timestamped Transcript")
-        st.text_area("Transcript with Timestamps", value=rec.get('transcript_text', 'No raw transcript stored.'), height=450)
+        st.text_area("Transcript with Timestamps", value=rec.get('transcript_text', 'No transcript stored.'), height=450)
 
 
-# CASE 2: No active session - Display Interactive Generation Stage
+# CASE 2: No active session - Generation Screen
 else:
     st.markdown("""
-    <div style="background: white; border: 1px solid #E2E8F0; border-radius: 16px; padding: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 24px;">
-        <h3 style="margin-top: 0; color: #1E293B; font-weight: 800;">🚀 Create New Study Notes & PDF Guide</h3>
-        <p style="color: #64748B; font-size: 14px; margin-bottom: 20px;">
-            Paste any educational YouTube video or playlist link below. Our AI will transcribe, organize key concepts, extract formulas, and generate a printable PDF booklet.
+    <div class="dash-card">
+        <h3 style="margin-top: 0; color: #1E293B; font-weight: 800;">🚀 Create Study Notes & PDF Guide</h3>
+        <p style="color: #64748B; font-size: 14px; margin-bottom: 16px;">
+            Paste any educational YouTube video or playlist link below. The AI will extract concepts, formulas, definitions, and format a publication-ready PDF.
         </p>
     """, unsafe_allow_html=True)
 
@@ -447,7 +414,7 @@ else:
         is_playlist = is_playlist_url(url)
 
         if not BACKEND_API_KEY:
-            st.error("Gemini API key is missing from `.env` file.")
+            st.error("⚠️ Gemini API key is missing. Please set GEMINI_API_KEY in your environment or Streamlit secrets.")
             st.stop()
 
         # ================== PLAYLIST MODE ==================
@@ -463,9 +430,10 @@ else:
 
             selected_indices = list(range(len(playlist_data['videos']))) if scope == "All videos in playlist" else [video_titles.index(st.selectbox("Choose video:", video_titles))]
 
-            if st.button("🚀 Generate Notes & PDF Booklet", type="primary"):
+            if st.button("🚀 Generate Notes & PDF Booklet", type="primary", width="stretch"):
                 p_bar = st.progress(0.0)
                 status_box = st.empty()
+                last_record_data = None
 
                 for step_idx, v_idx in enumerate(selected_indices):
                     v_info = playlist_data['videos'][v_idx]
@@ -516,16 +484,35 @@ else:
                         pdf_bytes=pdf_bytes
                     )
 
+                    last_record_data = {
+                        'id': new_id,
+                        'user_id': USER_ID,
+                        'video_id': v_info['id'],
+                        'url': v_info['url'],
+                        'title': v_info['title'],
+                        'channel': playlist_data['uploader'],
+                        'duration': v_info['duration_formatted'],
+                        'thumbnail_url': "",
+                        'playlist_title': playlist_data['title'],
+                        'notes_markdown': n_res['notes_markdown'],
+                        'transcript_text': t_res['timestamped_text'],
+                        'pdf_path': str(pdf_path),
+                        'pdf_filename': pdf_path.name,
+                        'pdf_blob': pdf_bytes,
+                        'created_at': 'Just now'
+                    }
+
                     p_bar.progress((step_idx + 1) / len(selected_indices))
 
-                st.session_state.active_record = get_record_by_id(new_id, user_id=USER_ID)
-                st.rerun()
+                if last_record_data:
+                    st.session_state.active_record = last_record_data
+                    st.rerun()
 
         # ================== SINGLE VIDEO MODE ==================
         else:
             vid_id = extract_video_id(url)
             if not vid_id:
-                st.error("Invalid YouTube URL. Please enter a valid YouTube link.")
+                st.error("Please enter a valid YouTube video link.")
             else:
                 with st.spinner("Fetching lecture details..."):
                     try:
@@ -535,28 +522,30 @@ else:
                         meta = None
 
                 if meta:
-                    st.markdown("<div class='interactive-card'>", unsafe_allow_html=True)
-                    c_th, c_info = st.columns([1, 4])
-                    with c_th:
-                        if meta.get('thumbnail'):
-                            st.image(meta['thumbnail'], use_container_width=True)
-                    with c_info:
-                        st.markdown(f"#### {meta['title']}")
-                        st.markdown(f"👤 **{meta['uploader']}** • ⏱️ {meta['duration_formatted']}")
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    # Fully Responsive Mobile & Desktop Video Preview
+                    st.markdown(f"""
+                    <div class="dash-card">
+                        <div style="font-size: 18px; font-weight: 700; color: #1E293B; margin-bottom: 8px;">{meta['title']}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                            <span class="video-badge">👤 {meta['uploader']}</span>
+                            <span class="duration-badge">⏱️ Duration: {meta['duration_formatted']}</span>
+                            <span class="video-badge">📖 Ready to Study</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                    if st.button("🚀 Generate Study Notes & PDF Guide", type="primary"):
+                    if st.button("🚀 Generate Study Notes & PDF Guide", type="primary", width="stretch"):
                         with st.status("Synthesizing Lecture into Study Booklet...", expanded=True) as status:
-                            st.write("📥 1. Extracting lecture transcript...")
+                            st.write("📥 **Step 1:** Extracting transcript (bypassing cloud blocks)...")
                             t_res = get_video_transcript(vid_id)
 
                             if not t_res['success']:
                                 status.update(label="Transcript extraction failed", state="error")
-                                st.error(f"Error: {t_res.get('error')}")
+                                st.error(f"Extraction Error: {t_res.get('error')}")
                             else:
-                                st.write(f"✅ Extracted **{t_res['word_count']} words** from lecture audio.")
+                                st.write(f"✅ Transcribed **{t_res['word_count']:,} words** ({t_res['language']}).")
 
-                                st.write("🧠 2. Synthesizing concepts, definitions, formulas & quiz...")
+                                st.write("🧠 **Step 2:** Gemini AI synthesizing lecture notes & quiz questions...")
                                 payload = t_res['timestamped_text'] or t_res['formatted_text']
                                 n_res = generate_study_notes(
                                     video_title=meta['title'],
@@ -570,9 +559,9 @@ else:
 
                                 if not n_res['success']:
                                     status.update(label="AI Generation Failed", state="error")
-                                    st.error(f"Error: {n_res.get('error')}")
+                                    st.error(f"AI Error: {n_res.get('error')}")
                                 else:
-                                    st.write("📄 3. Formatting and compiling publication PDF booklet...")
+                                    st.write("📄 **Step 3:** Formatting publication-grade PDF booklet...")
                                     safe_name = sanitize_filename(meta['title'])
                                     pdf_path = OUTPUT_DIR / f"{safe_name}.pdf"
 
@@ -604,32 +593,49 @@ else:
 
                                     status.update(label="🎉 Study Notes & PDF Ready!", state="complete")
 
-                                    # Load newly created record as active
-                                    st.session_state.active_record = get_record_by_id(new_id, user_id=USER_ID)
+                                    # Directly load into memory (100% resilient across mobile browsers)
+                                    record_data = {
+                                        'id': new_id,
+                                        'user_id': USER_ID,
+                                        'video_id': vid_id,
+                                        'url': url,
+                                        'title': meta['title'],
+                                        'channel': meta['uploader'],
+                                        'duration': meta['duration_formatted'],
+                                        'thumbnail_url': meta.get('thumbnail', ''),
+                                        'playlist_title': None,
+                                        'notes_markdown': n_res['notes_markdown'],
+                                        'transcript_text': t_res['timestamped_text'],
+                                        'pdf_path': str(pdf_path),
+                                        'pdf_filename': pdf_path.name,
+                                        'pdf_blob': pdf_data,
+                                        'created_at': 'Just now'
+                                    }
+                                    st.session_state.active_record = record_data
                                     st.rerun()
     else:
-        # Initial Welcome Features Grid
+        # Features Grid
         st.markdown("""
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 10px;">
-            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px;">
-                <div style="font-size: 26px; margin-bottom: 8px;">📑</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 10px;">
+            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px;">
+                <div style="font-size: 24px; margin-bottom: 6px;">📑</div>
                 <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">Structured Notes</div>
-                <div style="font-size: 13px; color: #64748B;">Executive summaries, exam cheat sheets, and chronological concept breakdowns.</div>
+                <div style="font-size: 13px; color: #64748B;">Executive summaries, exam cheat sheets, and concept breakdowns.</div>
             </div>
-            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px;">
-                <div style="font-size: 26px; margin-bottom: 8px;">💬</div>
+            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px;">
+                <div style="font-size: 24px; margin-bottom: 6px;">💬</div>
                 <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">Interactive AI Tutor</div>
-                <div style="font-size: 13px; color: #64748B;">Chat directly with the lecture! Ask clarifying questions and resolve doubts in real time.</div>
+                <div style="font-size: 13px; color: #64748B;">Ask doubts and get answers based on the video in real time.</div>
             </div>
-            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px;">
-                <div style="font-size: 26px; margin-bottom: 8px;">🎯</div>
+            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px;">
+                <div style="font-size: 24px; margin-bottom: 6px;">🎯</div>
                 <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">Active Recall Quizzes</div>
-                <div style="font-size: 13px; color: #64748B;">Self-test comprehension questions and flashcard concepts to prepare for exams.</div>
+                <div style="font-size: 13px; color: #64748B;">Self-test comprehension questions to prepare for tests.</div>
             </div>
-            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px;">
-                <div style="font-size: 26px; margin-bottom: 8px;">📄</div>
+            <div style="background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px;">
+                <div style="font-size: 24px; margin-bottom: 6px;">📄</div>
                 <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">Publication-Ready PDF</div>
-                <div style="font-size: 13px; color: #64748B;">Download beautiful, textbook-style PDF booklets with callout boxes and headers.</div>
+                <div style="font-size: 13px; color: #64748B;">Download beautiful textbook-style PDF booklets.</div>
             </div>
         </div>
         """, unsafe_allow_html=True)

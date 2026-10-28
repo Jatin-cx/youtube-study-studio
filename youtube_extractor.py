@@ -48,9 +48,10 @@ def get_video_metadata(url_or_id: str) -> Dict[str, Any]:
     """Fetch video metadata (title, channel, duration, etc.) using yt-dlp."""
     ydl_opts = {
         'skip_download': True,
-        'extract_flat': True,
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 8,
+        'retries': 2,
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'ios', 'web']
@@ -145,6 +146,8 @@ def get_transcript_via_ytdlp(video_id: str, preferred_languages: Optional[List[s
         'skip_download': True,
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 10,
+        'retries': 2,
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'ios', 'web']
