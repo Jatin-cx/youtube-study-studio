@@ -1,0 +1,7 @@
+youtube-transcript-api>=1.2.4
+yt-dlp>=2026.10.26
+google-genai>=2.33.0
+reportlab>=5.1.0
+fpdf2>=2.8.9
+streamlit>=1.66.1
+python-dotenv>=1.2.4

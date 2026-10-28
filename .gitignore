@@ -1,0 +1,24 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Secrets & Credentials
+.env
+*.env
+
+# Cache & Compiled
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Generated User Files
+generated_notes/
+*.pdf
+study_history.db
+
+# OS Files
+.DS_Store
+Thumbs.db
