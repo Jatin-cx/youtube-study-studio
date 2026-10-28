@@ -1,9 +1,11 @@
 """
 YouTube Video and Playlist Metadata & Transcript Extractor.
 Supports single video URLs and full playlist URLs.
+Includes Android/iOS mobile client fallback to bypass cloud IP blocks.
 """
 
 import re
+import requests
 from typing import Dict, List, Optional, Any
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import yt_dlp
@@ -49,6 +51,11 @@ def get_video_metadata(url_or_id: str) -> Dict[str, Any]:
         'extract_flat': True,
         'quiet': True,
         'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web']
+            }
+        }
     }
     
     video_url = url_or_id if url_or_id.startswith("http") else f"https://www.youtube.com/watch?v={url_or_id}"
@@ -73,6 +80,11 @@ def get_playlist_videos(playlist_url: str) -> Dict[str, Any]:
         'extract_flat': 'in_playlist',
         'quiet': True,
         'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web']
+            }
+        }
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -120,10 +132,129 @@ def format_timestamp(seconds: float) -> str:
     return f"{m:02d}:{s:02d}"
 
 
+def get_transcript_via_ytdlp(video_id: str, preferred_languages: Optional[List[str]] = None) -> Dict[str, Any]:
+    """
+    Fallback transcript extractor using yt-dlp with YouTube Android/iOS mobile client emulation.
+    Bypasses datacenter and cloud IP blocks on Streamlit Cloud, AWS, and GCP.
+    """
+    if preferred_languages is None:
+        preferred_languages = ['en', 'en-US', 'hi', 'es', 'fr', 'de']
+        
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {
+        'skip_download': True,
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web']
+            }
+        }
+    }
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            subs = info.get('subtitles') or {}
+            auto_subs = info.get('automatic_captions') or {}
+            
+            all_captions = {}
+            for lang, tracks in auto_subs.items():
+                all_captions[lang] = tracks
+            for lang, tracks in subs.items():
+                all_captions[lang] = tracks
+                
+            selected_lang = None
+            for plang in preferred_languages:
+                if plang in all_captions:
+                    selected_lang = plang
+                    break
+                    
+            if not selected_lang and all_captions:
+                selected_lang = next(iter(all_captions.keys()))
+                
+            if not selected_lang:
+                return {
+                    'success': False,
+                    'error': 'No subtitles or transcripts found for this video.',
+                    'raw_segments': [],
+                    'formatted_text': '',
+                    'timestamped_text': ''
+                }
+                
+            formats = all_captions[selected_lang]
+            json3_track = next((f['url'] for f in formats if f.get('ext') == 'json3'), None)
+            
+            raw_segments = []
+            raw_text_pieces = []
+            grouped_timestamped = []
+            current_block_start = 0.0
+            current_block_text = []
+
+            if json3_track:
+                resp = requests.get(json3_track, timeout=15).json()
+                events = resp.get('events', [])
+                for ev in events:
+                    t_start = ev.get('tStartMs', 0) / 1000.0
+                    d_ms = ev.get('dDurationMs', 0) / 1000.0
+                    seg_text = "".join(seg.get('utf8', '') for seg in ev.get('segs', []) if seg.get('utf8'))
+                    seg_text = seg_text.strip()
+                    if not seg_text or seg_text == '\n':
+                        continue
+                        
+                    raw_segments.append({'text': seg_text, 'start': t_start, 'duration': d_ms})
+                    raw_text_pieces.append(seg_text)
+                    
+                    if not current_block_text:
+                        current_block_start = t_start
+                        current_block_text.append(seg_text)
+                    elif t_start - current_block_start >= 45.0:
+                        block_str = f"[{format_timestamp(current_block_start)}] " + " ".join(current_block_text)
+                        grouped_timestamped.append(block_str)
+                        current_block_start = t_start
+                        current_block_text = [seg_text]
+                    else:
+                        current_block_text.append(seg_text)
+            else:
+                track_url = formats[0]['url']
+                vtt_text = requests.get(track_url, timeout=15).text
+                clean_lines = [l.strip() for l in vtt_text.splitlines() if l.strip() and not l.startswith('WEBVTT') and '-->' not in l]
+                full_raw = " ".join(clean_lines)
+                raw_text_pieces.append(full_raw)
+                grouped_timestamped.append(full_raw)
+                
+            if current_block_text:
+                block_str = f"[{format_timestamp(current_block_start)}] " + " ".join(current_block_text)
+                grouped_timestamped.append(block_str)
+                
+            full_text = " ".join(raw_text_pieces)
+            timestamped_full = "\n\n".join(grouped_timestamped)
+            
+            return {
+                'success': True,
+                'language': selected_lang,
+                'is_generated': True,
+                'raw_segments': raw_segments,
+                'formatted_text': full_text,
+                'timestamped_text': timestamped_full,
+                'segment_count': len(raw_segments),
+                'word_count': len(full_text.split())
+            }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Failed to retrieve transcript: {str(e)}',
+            'raw_segments': [],
+            'formatted_text': '',
+            'timestamped_text': ''
+        }
+
+
 def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Fetch transcripts for a YouTube video.
-    Returns structured transcript with timestamps and clean text.
+    Tries YouTubeTranscriptApi first, then automatically falls back to yt-dlp mobile client
+    to bypass cloud/datacenter IP blocks.
     """
     if preferred_languages is None:
         preferred_languages = ['en', 'en-US', 'hi', 'es', 'fr', 'de']
@@ -132,12 +263,11 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
         ytt_api = YouTubeTranscriptApi()
         transcript_list = ytt_api.list(video_id)
         
-        # Try to find transcript in preferred languages
         transcript = None
         selected_lang = None
         is_generated = False
         
-        # 1. Try manual transcript in preferred languages
+        # 1. Try manual transcript
         for lang in preferred_languages:
             try:
                 transcript = transcript_list.find_manually_created_transcript([lang])
@@ -147,7 +277,7 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
             except Exception:
                 continue
                 
-        # 2. Try generated transcript if no manual one found
+        # 2. Try generated transcript
         if not transcript:
             for lang in preferred_languages:
                 try:
@@ -158,7 +288,7 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
                 except Exception:
                     continue
                     
-        # 3. Fallback: Take the first available transcript
+        # 3. Take first available
         if not transcript:
             for t in transcript_list:
                 transcript = t
@@ -167,17 +297,11 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
                 break
 
         if not transcript:
-            return {
-                'success': False,
-                'error': 'No transcript could be retrieved for this video.',
-                'raw_segments': [],
-                'formatted_text': '',
-                'timestamped_text': ''
-            }
+            # Fallback to yt-dlp
+            return get_transcript_via_ytdlp(video_id, preferred_languages)
             
         fetched = transcript.fetch()
         
-        # Build clean formatted text and timestamped text
         raw_text_pieces = []
         current_block_start = 0.0
         current_block_text = []
@@ -224,27 +348,8 @@ def get_video_transcript(video_id: str, preferred_languages: Optional[List[str]]
             'word_count': len(full_text.split())
         }
         
-    except TranscriptsDisabled:
-        return {
-            'success': False,
-            'error': 'Transcripts are disabled for this video by the creator.',
-            'raw_segments': [],
-            'formatted_text': '',
-            'timestamped_text': ''
-        }
-    except NoTranscriptFound:
-        return {
-            'success': False,
-            'error': 'No transcript was found for this video.',
-            'raw_segments': [],
-            'formatted_text': '',
-            'timestamped_text': ''
-        }
+    except (TranscriptsDisabled, NoTranscriptFound):
+        return get_transcript_via_ytdlp(video_id, preferred_languages)
     except Exception as e:
-        return {
-            'success': False,
-            'error': f'Failed to retrieve transcript: {str(e)}',
-            'raw_segments': [],
-            'formatted_text': '',
-            'timestamped_text': ''
-        }
+        # Any other error (including IP block / RequestBlocked): invoke mobile client fallback
+        return get_transcript_via_ytdlp(video_id, preferred_languages)
