@@ -57,6 +57,17 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # Initialize database
 init_db()
 
+# User Private Session Isolation (Each visitor gets their own private workspace)
+import uuid
+
+if "uid" in st.query_params:
+    USER_ID = str(st.query_params["uid"])
+else:
+    USER_ID = st.session_state.get("user_id") or str(uuid.uuid4())[:12]
+    st.query_params["uid"] = USER_ID
+
+st.session_state["user_id"] = USER_ID
+
 
 def sanitize_filename(name: str) -> str:
     """Sanitize strings for safe file paths."""
@@ -227,8 +238,8 @@ if "chat_messages" not in st.session_state:
 # =====================================================================
 with st.sidebar:
     st.markdown("### 📚 Study Library")
-    stats = get_db_stats()
-    st.caption(f"**{stats['total_notes']}** Notes Archived • **{stats['total_channels']}** Channels")
+    stats = get_db_stats(USER_ID)
+    st.caption(f"**{stats['total_notes']}** Notes in your private library")
 
     if st.button("➕ New Study Session", use_container_width=True):
         st.session_state.active_record = None
@@ -239,7 +250,7 @@ with st.sidebar:
 
     # Search History in Sidebar
     hist_search = st.text_input("🔍 Search History", placeholder="Topic or channel...", label_visibility="collapsed")
-    records = get_all_records(hist_search)
+    records = get_all_records(USER_ID, hist_search)
 
     if not records:
         st.caption("No past sessions yet. Generate your first lecture notes!")
@@ -251,13 +262,13 @@ with st.sidebar:
                 is_current = st.session_state.active_record and st.session_state.active_record.get('id') == r['id']
                 label = f"📖 {r['title'][:28]}..." if len(r['title']) > 28 else f"📖 {r['title']}"
                 if st.button(label, key=f"rec_btn_{r['id']}", use_container_width=True):
-                    full_r = get_record_by_id(r['id'])
+                    full_r = get_record_by_id(r['id'], user_id=USER_ID)
                     st.session_state.active_record = full_r
                     st.session_state.chat_messages = []
                     st.rerun()
             with col_h2:
                 if st.button("✕", key=f"rec_del_{r['id']}", help="Delete session"):
-                    delete_record(r['id'])
+                    delete_record(r['id'], user_id=USER_ID)
                     if st.session_state.active_record and st.session_state.active_record.get('id') == r['id']:
                         st.session_state.active_record = None
                     st.rerun()
@@ -491,6 +502,7 @@ else:
                         pdf_bytes = pf.read()
 
                     new_id = save_study_record(
+                        user_id=USER_ID,
                         video_id=v_info['id'],
                         url=v_info['url'],
                         title=v_info['title'],
@@ -506,7 +518,7 @@ else:
 
                     p_bar.progress((step_idx + 1) / len(selected_indices))
 
-                st.session_state.active_record = get_record_by_id(new_id)
+                st.session_state.active_record = get_record_by_id(new_id, user_id=USER_ID)
                 st.rerun()
 
         # ================== SINGLE VIDEO MODE ==================
@@ -576,6 +588,7 @@ else:
 
                                     # Save to SQLite Database
                                     new_id = save_study_record(
+                                        user_id=USER_ID,
                                         video_id=vid_id,
                                         url=url,
                                         title=meta['title'],
@@ -592,7 +605,7 @@ else:
                                     status.update(label="🎉 Study Notes & PDF Ready!", state="complete")
 
                                     # Load newly created record as active
-                                    st.session_state.active_record = get_record_by_id(new_id)
+                                    st.session_state.active_record = get_record_by_id(new_id, user_id=USER_ID)
                                     st.rerun()
     else:
         # Initial Welcome Features Grid
