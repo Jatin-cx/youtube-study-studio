@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 import streamlit as st
+import streamlit.components.v1 as components
 
 from youtube_extractor import (
     get_video_metadata,
@@ -391,13 +392,80 @@ button[data-testid="baseButton-headerNoPadding"] {{
     padding: 4px 8px !important;
 }}
 
+/* Completely remove Streamlit Community Cloud "Manage app" button and badges */
+#manage-app-button,
+[data-testid="manage-app-button"],
+div[class*="viewerBadge"],
+.viewerBadge_container__1QSob,
+.viewerBadge_link__1S137,
+a[class*="viewerBadge"],
+button[kind="manageApp"],
+[class*="ManageApp"],
+[data-testid="stStatusWidget"],
+iframe[title="streamlit_app_share"] {{
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    position: absolute !important;
+    z-index: -9999 !important;
+}}
+
 footer {{
-    visibility: hidden;
+    display: none !important;
+    visibility: hidden !important;
 }}
 </style>
 """
 
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+# JavaScript injection to remove the "Manage app" button from the parent frame DOM
+components.html("""
+<script>
+function eradicateManageApp() {
+    try {
+        const targets = [
+            '#manage-app-button',
+            '[data-testid="manage-app-button"]',
+            '.viewerBadge_container__1QSob',
+            '.viewerBadge_link__1S137',
+            'div[class*="viewerBadge"]',
+            'a[class*="viewerBadge"]',
+            'button[kind="manageApp"]'
+        ];
+        
+        [document, window.parent ? window.parent.document : null].forEach(doc => {
+            if (!doc) return;
+            targets.forEach(selector => {
+                doc.querySelectorAll(selector).forEach(el => {
+                    el.style.setProperty('display', 'none', 'important');
+                    el.style.setProperty('visibility', 'hidden', 'important');
+                    el.style.setProperty('opacity', '0', 'important');
+                    el.style.setProperty('pointer-events', 'none', 'important');
+                    if (el.parentNode && el.classList.contains('viewerBadge_container__1QSob')) {
+                        el.parentNode.removeChild(el);
+                    }
+                });
+            });
+            
+            // Text content fallback scan
+            doc.querySelectorAll('button, div, a').forEach(el => {
+                if (el.textContent && el.textContent.trim().toLowerCase().includes('manage app')) {
+                    el.style.setProperty('display', 'none', 'important');
+                    el.style.setProperty('visibility', 'hidden', 'important');
+                }
+            });
+        });
+    } catch (e) {}
+}
+
+eradicateManageApp();
+setInterval(eradicateManageApp, 300);
+</script>
+""", height=0, width=0)
 
 # Session State Initialization
 if "active_record" not in st.session_state:
