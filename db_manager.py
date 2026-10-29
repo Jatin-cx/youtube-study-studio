@@ -39,15 +39,20 @@ def init_db():
                 pdf_filename TEXT NOT NULL,
                 pdf_path TEXT NOT NULL,
                 pdf_blob BLOB,
+                flashcards_json TEXT,
+                mindmap_code TEXT,
+                cram_sheet_markdown TEXT,
+                chapters_json TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
-        # Check if user_id column exists (for backward compatibility migration)
+        # Check and migrate columns dynamically
         cursor.execute("PRAGMA table_info(study_history)")
         columns = [col['name'] for col in cursor.fetchall()]
-        if 'user_id' not in columns:
-            cursor.execute("ALTER TABLE study_history ADD COLUMN user_id TEXT DEFAULT 'anonymous'")
+        for col_name in ['user_id', 'flashcards_json', 'mindmap_code', 'cram_sheet_markdown', 'chapters_json']:
+            if col_name not in columns:
+                cursor.execute(f"ALTER TABLE study_history ADD COLUMN {col_name} TEXT")
             
         conn.commit()
 
@@ -101,6 +106,37 @@ def save_study_record(
         ))
         conn.commit()
         return cursor.lastrowid
+
+
+def update_study_artifacts(
+    record_id: int,
+    flashcards_json: Optional[str] = None,
+    mindmap_code: Optional[str] = None,
+    cram_sheet_markdown: Optional[str] = None,
+    chapters_json: Optional[str] = None
+):
+    """Update cached AI study artifacts for a saved session."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        updates = []
+        params = []
+        if flashcards_json is not None:
+            updates.append("flashcards_json = ?")
+            params.append(flashcards_json)
+        if mindmap_code is not None:
+            updates.append("mindmap_code = ?")
+            params.append(mindmap_code)
+        if cram_sheet_markdown is not None:
+            updates.append("cram_sheet_markdown = ?")
+            params.append(cram_sheet_markdown)
+        if chapters_json is not None:
+            updates.append("chapters_json = ?")
+            params.append(chapters_json)
+        if updates:
+            params.append(record_id)
+            cursor.execute(f"UPDATE study_history SET {', '.join(updates)} WHERE id = ?", params)
+            conn.commit()
 
 
 def get_all_records(user_id: str, search_query: Optional[str] = None) -> List[Dict[str, Any]]:
