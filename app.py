@@ -1017,7 +1017,8 @@ else:
                         api_key=BACKEND_API_KEY,
                         detail_level=depth_key,
                         include_timestamps=True,
-                        model_name="gemini-3.5-flash-lite"
+                        model_name="gemini-3.5-flash-lite",
+                        progress_callback=lambda msg: status_box.info(f"({step_idx + 1}/{len(selected_indices)}) {msg}")
                     )
 
                     if not n_res['success']:
@@ -1130,7 +1131,8 @@ else:
                                     api_key=BACKEND_API_KEY,
                                     detail_level=depth_key,
                                     include_timestamps=True,
-                                    model_name="gemini-3.5-flash-lite"
+                                    model_name="gemini-3.5-flash-lite",
+                                    progress_callback=lambda msg: st.write(f"📖 {msg}")
                                 )
 
                                 if not n_res['success']:

@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether, PageBreak
 )
 from reportlab.pdfgen import canvas
 
@@ -230,6 +230,19 @@ def create_study_pdf(
             continue
 
         if not stripped:
+            i += 1
+            continue
+
+        # Page break tags
+        if stripped.lower() in ['[pagebreak]', '\\pagebreak', '<!-- pagebreak -->', '<pagebreak>']:
+            story.append(PageBreak())
+            i += 1
+            continue
+
+        # Horizontal divider rules
+        if stripped in ['---', '***', '___']:
+            story.append(Spacer(1, 4))
+            story.append(HRFlowable(width="100%", thickness=0.8, color=colors.HexColor("#CBD5E1"), spaceBefore=4, spaceAfter=8))
             i += 1
             continue
 
